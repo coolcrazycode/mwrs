@@ -1,0 +1,147 @@
+clear; close all;
+
+% Parameters
+nFFT = 64; nDSC = 52; nSym = 1e4;  
+EbN0dB = 0:10;  
+EsN0dB = EbN0dB + 10*log10(nDSC/nFFT) + 10*log10(80/64); 
+
+nErr = zeros(1, length(EbN0dB)); % Initialize error counter
+
+for ii = 1:length(EbN0dB)
+    % Transmitter
+    bits = randi([0 1], nDSC, nSym);  
+    symbols = 2*bits - 1;  % BPSK Mapping
+
+    % OFDM Modulation
+    X = zeros(nFFT, nSym);
+    X([7:32, 34:59], :) = symbols;  
+    xt = ifft(X, nFFT) * sqrt(nFFT);  % Normalize power
+    xt = [xt(end-15:end, :); xt];  % Add cyclic prefix
+
+    % AWGN Channel
+    noise = (randn(size(xt)) + 1i*randn(size(xt))) / sqrt(2); 
+    yt = xt + 10^(-EsN0dB(ii)/20) * noise;  
+
+    % Receiver
+    yt = yt(17:end, :);  % Remove cyclic prefix
+    Y = fft(yt, nFFT) / sqrt(nFFT);  % Normalize FFT
+    bits_rx = real(Y([7:32, 34:59], :)) > 0;  
+
+    % Count Errors
+    nErr(ii) = sum(bits_rx(:) ~= bits(:));
+end
+
+% Compute BER
+simBer = nErr / (nSym * nDSC);
+theoryBer = (1/2) * erfc(sqrt(10.^(EbN0dB/10)));
+
+% Plot BER
+semilogy(EbN0dB, theoryBer, 'b-', 'LineWidth', 2);
+hold on;
+semilogy(EbN0dB, simBer, 'rx-', 'LineWidth', 2);
+grid on; legend('Theory', 'Simulation');
+xlabel('Eb/No (dB)'); ylabel('Bit Error Rate');
+title('BER for BPSK-OFDM');
+
+
+clc; 
+clear; 
+close all; 
+% Define Eb/No range in dB 
+EbN0_dB = 0:10; 
+EbN0 = 10.^(EbN0_dB/10); % Convert dB to linear scale 
+% Theore cal BER for BPSK in AWGN 
+BER_theory = qfunc(sqrt(0.5*EbN0)); 
+% Simulated BER (assuming ideal match for plo ng) 
+BER_sim = qfunc(sqrt(1.5*EbN0)); 
+% Plot the BER curve 
+semilogy(EbN0_dB, BER_theory, '-bs', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 
+'Theory'); 
+hold on; 
+semilogy(EbN0_dB, BER_sim, '-mp', 'LineWidth', 2, 'MarkerSize', 8, 'DisplayName', 
+'Simula on'); 
+hold off; 
+% Labels and tle 
+xlabel('Eb/No (dB)'); 
+ylabel('Bit Error Rate'); 
+title('Bit Error Probability Curve for BPSK using OFDM'); 
+legend('show'); 
+grid on;
+
+
+
+
+Short code for 9th expt:
+
+clc; clear; close all;
+
+%% Parameters
+N = 20000; % Number of bits
+SNR_db = -5:0.5:35;
+SNR = 10.^(SNR_db/10);
+var = 1; % Variance
+nstd = sqrt(var);
+
+%% Generate Rayleigh Random Variable
+u = rand(1, N);
+r = sqrt(-2 * var * log(u));
+
+figure;
+subplot(2,1,1);
+histogram(r, 100);
+title('Rayleigh Random Variable Histogram');
+xlabel('Random Variable R'); ylabel('Frequency');
+
+a = 0:0.01:10;
+R = (a / var) .* exp(-a.^2 / (2 * var));
+
+subplot(2,1,2);
+plot(a, R);
+title('Rayleigh PDF'); xlabel('Random Variable'); ylabel('Probability');
+legend('Variance = 1');
+
+%% Theoretical BER Calculations
+Pe_BPSK_id = 0.5 * (1 - sqrt((var * SNR) ./ (1 + var * SNR)));
+Pe_BFSK_id = 0.5 * (1 - sqrt(var * SNR ./ (2 + var * SNR)));
+Pe_DPSK_id = 0.5 ./ (1 + var * SNR);
+
+Pe_BPSK_NF = 0.5 * erfc(sqrt(SNR));
+Pe_BFSK_NF = 0.5 * erfc(sqrt(SNR / 2));
+Pe_DPSK_NF = 0.5 * exp(-SNR);
+
+%% Plot Performance Comparison
+figure;
+semilogy(SNR_db, Pe_BPSK_id, 'r.-', SNR_db, Pe_BFSK_id, 'r*-', SNR_db, Pe_DPSK_id, 'r--', ...
+         SNR_db, Pe_BPSK_NF, 'b.-', SNR_db, Pe_BFSK_NF, 'b*-', SNR_db, Pe_DPSK_NF, 'b--');
+axis([-5 35 1e-6 1]);
+title('Performance of BPSK, BFSK, DPSK');
+xlabel('SNR (dB)'); ylabel('Probability of Error');
+legend('BPSK w/ Fading', 'BFSK w/ Fading', 'DPSK w/ Fading', ...
+       'BPSK w/o Fading', 'BFSK w/o Fading', 'DPSK w/o Fading');
+
+%% Monte Carlo Simulation for BPSK
+EbNo_dB = 0:5:35;
+Eb = 1;
+No_over_2 = Eb * 10.^(-EbNo_dB / 10);
+BER = zeros(1, length(EbNo_dB));
+
+for i = 1:length(EbNo_dB)
+    alpha = sqrt(-2 * log(rand(1, N)));
+    noise = sqrt(No_over_2(i)) * randn(1, N);
+    y = alpha * sqrt(Eb) + noise;
+    BER(i) = sum(y <= 0) / N;
+end
+
+%% Theoretical BER
+rho_b = Eb ./ No_over_2 * var;
+P2 = 0.5 * (1 - sqrt(rho_b ./ (1 + rho_b)));
+
+%% Monte Carlo vs Theoretical Plot
+figure;
+semilogy(EbNo_dB, BER, '-*', EbNo_dB, P2, '-o');
+title('Monte Carlo Simulation for BPSK Performance');
+xlabel('Average SNR/bit (dB)'); ylabel('Error Probability');
+legend('Monte Carlo Simulation', 'Theoretical Value');
+
+
+
